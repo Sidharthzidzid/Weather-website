@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nimbus Weather</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --sky-top: #0b1a2e;
+    --sky-mid: #0f2a4a;
+    --sky-low: #1a3a5c;
+    --accent: #4fc3f7;
+    --accent-glow: rgba(79, 195, 247, 0.18);
+    --card-bg: rgba(255,255,255,0.06);
+    --card-border: rgba(255,255,255,0.1);
+    --text: #e8f4fd;
+    --text-muted: rgba(232, 244, 253, 0.55);
+    --text-dim: rgba(232, 244, 253, 0.35);
+    --danger: #ff6b6b;
+    --warn: #ffa94d;
+    --success: #69db7c;
+    --wind: #a9e34b;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--sky-top);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Stars BG */
+  .stars {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,0.6) 0%, transparent 100%),
+      radial-gradient(1px 1px at 42% 8%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 68% 14%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 30%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 25% 45%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 55% 55%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 90% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 10% 75%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 35% 88%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 72% 80%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 5% 90%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 3%, rgba(255,255,255,0.6) 0%, transparent 100%),
+      linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-low) 100%);
+  }
+
+  .app { position: relative; z-index: 1; max-width: 820px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.5rem; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 36px; height: 36px; }
+  .logo-name { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); }
+  .api-credit { font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* Search */
+  .search-area { margin-bottom: 2.5rem; }
+  .search-row { display: flex; gap: 10px; }
+  .search-input {
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 0.75rem 1.1rem;
+    font-size: 0.95rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+  .search-input:focus { border-color: var(--accent); }
+  .btn {
+    background: var(--accent);
+    color: var(--sky-top);
+    border: none;
+    border-radius: 12px;
+    padding: 0.75rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-ghost {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    font-weight: 500;
+    padding: 0.75rem 1rem;
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); opacity: 1; }
+  .search-hint { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+
+  /* State screens */
+  .state-screen {
+    text-align: center; padding: 4rem 1rem;
+    display: none;
+  }
+  .state-screen.visible { display: block; }
+  .state-icon { font-size: 3rem; margin-bottom: 1rem; }
+  .state-title { font-size: 1.1rem; color: var(--text-muted); }
+  .state-sub { font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem; }
+
+  /* Main weather card */
+  .weather-main { display: none; }
+  .weather-main.visible { display: block; }
+
+  .hero-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .hero-left { flex: 1; min-width: 180px; }
+  .hero-location { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+  .hero-coords { font-size: 12px; color: var(--text-dim); margin-top: 3px; letter-spacing: 0.04em; }
+  .hero-condition { font-size: 0.95rem; color: var(--accent); margin-top: 0.75rem; font-weight: 500; }
+  .hero-updated { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+  .hero-right { text-align: right; min-width: 120px; }
+  .hero-temp { font-size: 4.5rem; font-weight: 300; line-height: 1; letter-spacing: -0.03em; }
+  .hero-temp span { font-size: 2.5rem; color: var(--text-muted); }
+  .hero-feels { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  /* Metric grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .metric-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+  }
+  .metric-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .metric-label svg { opacity: 0.5; }
+  .metric-value { font-size: 1.5rem; font-weight: 600; line-height: 1; }
+  .metric-unit { font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; }
+
+  /* Forecast row */
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .forecast-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+  .forecast-cell {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 0.8rem 0.6rem;
+    text-align: center;
+  }
+  .fc-time { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+  .fc-icon { font-size: 1.4rem; margin-bottom: 4px; }
+  .fc-temp { font-size: 0.95rem; font-weight: 600; }
+  .fc-wind { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+  /* Marine strip */
+  .marine-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .marine-card {
+    background: rgba(79, 195, 247, 0.06);
+    border: 1px solid rgba(79, 195, 247, 0.18);
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .marine-icon { font-size: 1.6rem; flex-shrink: 0; }
+  .marine-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .marine-val { font-size: 1.2rem; font-weight: 600; }
+
+  /* Error toast */
+  .toast {
+    position: fixed;
+    bottom: 2rem; left: 50%; transform: translateX(-50%);
+    background: rgba(255,107,107,0.15);
+    border: 1px solid rgba(255,107,107,0.4);
+    color: #ff6b6b;
+    padding: 0.7rem 1.4rem;
+    border-radius: 10px;
+    font-size: 13px;
+    display: none;
+    z-index: 99;
+    white-space: nowrap;
+  }
+  .toast.show { display: block; }
+
+  .loading-pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+  /* Wind compass */
+  .compass-ring {
+    width: 40px; height: 40px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .compass-arrow {
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 14px solid var(--wind);
+    transform-origin: center 9px;
+  }
+
+  @media (max-width: 500px) {
+    .hero-card { flex-direction: column; }
+    .hero-right { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+
+<div class="app">
+  <header class="header">
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="18" r="17" fill="rgba(79,195,247,0.12)" stroke="rgba(79,195,247,0.4)" stroke-width="1"/>
+        <circle cx="18" cy="12" r="5" fill="#4fc3f7" opacity="0.9"/>
+        <path d="M8 24c0-4 4-6 10-6s10 2 10 6" stroke="#4fc3f7" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+        <path d="M6 27h24" stroke="rgba(79,195,247,0.3)" stroke-width="1" stroke-linecap="round"/>
+      </svg>
+      <span class="logo-name">NIMBUS</span>
+    </div>
+    <span class="api-credit">Stormglass.io</span>
+  </header>
+
+  <div class="search-area">
+    <div class="search-row">
+      <input
+        id="city-input"
+        class="search-input"
+        type="text"
+        placeholder="City name, e.g. Mumbai"
+        autocomplete="off"
+      />
+      <button class="btn btn-ghost" id="locate-btn" title="Use my location">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <circle cx="12" cy="12" r="7" stroke-opacity="0.4"/>
+        </svg>
+      </button>
+      <button class="btn" id="search-btn">Search</button>
+    </div>
+    <p class="search-hint">Enter a city name or use your location</p>
+  </div>
+
+  <!-- Idle state -->
+  <div class="state-screen visible" id="idle-screen">
+    <div class="state-icon">🌤</div>
+    <p class="state-title">Search for any city to see live weather</p>
+    <p class="state-sub">Powered by Stormglass.io · Data from top meteorological models</p>
+  </div>
+
+  <!-- Loading state -->
+  <div class="state-screen" id="loading-screen">
+    <div class="state-icon loading-pulse">🌐</div>
+    <p class="state-title">Fetching weather data…</p>
+  </div>
+
+  <!-- Error state -->
+  <div class="state-screen" id="error-screen">
+    <div class="state-icon">⚠️</div>
+    <p class="state-title" id="error-msg">Could not load weather data</p>
+    <p class="state-sub">Check the city name and try again</p>
+  </div>
+
+  <!-- Main weather output -->
+  <div class="weather-main" id="weather-main">
+    <!-- Hero -->
+    <div class="hero-card">
+      <div class="hero-left">
+        <div class="hero-location" id="loc-name">—</div>
+        <div class="hero-coords" id="loc-coords">—</div>
+        <div class="hero-condition" id="hero-condition">—</div>
+        <div class="hero-updated" id="hero-updated">—</div>
+      </div>
+      <div class="hero-right">
+        <div class="hero-temp" id="hero-temp">—<span>°C</span></div>
+        <div class="hero-feels" id="hero-feels">Feels like —°C</div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5-7 13-7 13S5 14 5 9a7 7 0 017-7z"/></svg>
+          Humidity
+        </div>
+        <div class="metric-value" id="m-humidity">—</div>
+        <div class="metric-unit">percent</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg>
+          Wind Speed
+        </div>
+        <div class="metric-value" id="m-wind">—</div>
+        <div class="metric-unit">m/s</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          Pressure
+        </div>
+        <div class="metric-value" id="m-pressure">—</div>
+        <div class="metric-unit">hPa</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.5 10.677a2 2 0 002.823 2.824"/><path d="M7.362 7.561C5.68 8.74 4.279 10.42 3 12c1.889 2.991 5.282 6 9 6 1.55 0 3.043-.523 4.395-1.35M12 6c3.785 0 7.078 3.093 9 6a15.3 15.3 0 01-1.369 1.91"/></svg>
+          Visibility
+        </div>
+        <div class="metric-value" id="m-visibility">—</div>
+        <div class="metric-unit">km</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v1M16.2 7.8l.7-.7M21 12h-1M16.2 16.2l.7.7M12 19v2M7.8 16.2l-.7.7M3 12H2M7.8 7.8l-.7-.7"/><circle cx="12" cy="12" r="4"/></svg>
+          UV Index
+        </div>
+        <div class="metric-value" id="m-uv">—</div>
+        <div class="metric-unit" id="m-uv-label">—</div>
+      </div>
+      <div class="metric-card" id="wind-dir-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M15 8l4 4-4 4"/></svg>
+          Wind Dir.
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+          <div class="compass-ring">
+            <div class="compass-arrow" id="compass-arrow"></div>
+          </div>
+          <div>
+            <div class="metric-value" id="m-winddir">—</div>
+            <div class="metric-unit" id="m-winddir-label">degrees</div>
+          </div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 16.2A4.5 4.5 0 0017.5 8h-1.8A7 7 0 104 15.2"/><path d="M12 12v9M8 17l4 4 4-4"/></svg>
+          Precipitation
+        </div>
+        <div class="metric-value" id="m-precip">—</div>
+        <div class="metric-unit">mm/hr</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          Cloud Cover
+        </div>
+        <div class="metric-value" id="m-cloud">—</div>
+        <div class="metric-unit">percent</div>
+      </div>
+    </div>
+
+    <!-- Forecast -->
+    <p class="section-title">Next 8 hours</p>
+    <div class="forecast-row" id="forecast-row"></div>
+
+    <!-- Marine -->
+    <p class="section-title" id="marine-title" style="display:none">Marine conditions</p>
+    <div class="marine-strip" id="marine-strip"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_KEY = '84c7f732-6522-11f1-9b33-0242ac120004-84c7f8a4-6522-11f1-9b33-0242ac120004';
+const GEOCODE_URL = 'https://nominatim.openstreetmap.org/search';
+
+const $ = id => document.getElementById(id);
+let currentLat = null, currentLng = null, currentCity = '';
+
+function showScreen(name) {
+  ['idle-screen','loading-screen','error-screen'].forEach(s => {
+    $(s).classList.remove('visible');
+  });
+  $('weather-main').classList.remove('visible');
+  if (name === 'weather') {
+    $('weather-main').classList.add('visible');
+  } else {
+    $(name + '-screen').classList.add('visible');
+  }
+}
+
+function showToast(msg, dur = 3500) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+async function geocodeCity(city) {
+  const url = `${GEOCODE_URL}?q=${encodeURIComponent(city)}&format=json&limit=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  if (!data || !data.length) throw new Error('City not found');
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
+function pickSource(sources) {
+  if (!sources || typeof sources !== 'object') return null;
+  const order = ['sg','noaa','meteo','dwd','smhi','meto','fcoo','yr'];
+  for (const s of order) {
+    if (sources[s] !== undefined && sources[s] !== null) return sources[s];
+  }
+  const vals = Object.values(sources).filter(v => v !== null && v !== undefined);
+  return vals.length ? vals[0] : null;
+}
+
+function conditionLabel(cloudCover, precip, windSpeed) {
+  if (precip > 3) return '🌧 Heavy rain';
+  if (precip > 0.5) return '🌦 Light rain';
+  if (cloudCover > 80) return '☁️ Overcast';
+  if (cloudCover > 50) return '🌥 Mostly cloudy';
+  if (cloudCover > 20) return '⛅ Partly cloudy';
+  if (windSpeed > 12) return '💨 Windy and clear';
+  return '☀️ Clear skies';
+}
+
+function uvLabel(uv) {
+  if (uv === null) return '—';
+  if (uv < 3) return 'Low';
+  if (uv < 6) return 'Moderate';
+  if (uv < 8) return 'High';
+  if (uv < 11) return 'Very High';
+  return 'Extreme';
+}
+
+function windDirLabel(deg) {
+  if (deg === null) return '—';
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function fcIcon(cloudCover, precip) {
+  if (precip > 2) return '🌧';
+  if (precip > 0.3) return '🌦';
+  if (cloudCover > 75) return '☁️';
+  if (cloudCover > 40) return '⛅';
+  return '☀️';
+}
+
+async function loadWeather(lat, lng, cityName) {
+  showScreen('loading');
+
+  const params = 'airTemperature,humidity,windSpeed,windDirection,airPressure,cloudCover,precipitation,visibility,currentDirection,currentSpeed,waveHeight,wavePeriod,waterTemperature,swellHeight';
+  const url = `https://api.stormglass.io/v2/weather/point?lat=${lat}&lng=${lng}&params=${params}`;
+
+  let data;
+  try {
+    const res = await fetch(url, { headers: { Authorization: API_KEY } });
+    data = await res.json();
+    if (!res.ok) throw new Error(data.errors?.key || data.message || 'API error');
+  } catch (e) {
+    $('error-msg').textContent = e.message.includes('429') ? 'Daily API quota reached' : (e.message || 'Could not fetch data');
+    showScreen('error');
+    return;
+  }
+
+  if (!data.hours || !data.hours.length) {
+    $('error-msg').textContent = 'No data returned for this location';
+    showScreen('error');
+    return;
+  }
+
+  const now = data.hours[0];
+  const temp = pickSource(now.airTemperature);
+  const humidity = pickSource(now.humidity);
+  const windSpeed = pickSource(now.windSpeed);
+  const windDir = pickSource(now.windDirection);
+  const pressure = pickSource(now.airPressure);
+  const cloud = pickSource(now.cloudCover);
+  const precip = pickSource(now.precipitation);
+  const vis = pickSource(now.visibility);
+
+  $('loc-name').textContent = cityName.split(',')[0];
+  $('loc-coords').textContent = `${lat.toFixed(3)}°, ${lng.toFixed(3)}°`;
+  $('hero-condition').textContent = conditionLabel(cloud, precip, windSpeed);
+  $('hero-updated').textContent = `Updated ${new Date(now.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+
+  $('hero-temp').innerHTML = `${temp !== null ? Math.round(temp) : '—'}<span>°C</span>`;
+  $('hero-feels').textContent = temp !== null ? `Feels like ${Math.round(temp - (windSpeed > 5 ? 1.5 : 0))}°C` : '';
+
+  $('m-humidity').textContent = humidity !== null ? Math.round(humidity) : '—';
+  $('m-wind').textContent = windSpeed !== null ? windSpeed.toFixed(1) : '—';
+  $('m-pressure').textContent = pressure !== null ? Math.round(pressure) : '—';
+  $('m-visibility').textContent = vis !== null ? (vis / 1000).toFixed(1) : '—';
+
+  const solar = pickSource(now.currentSpeed) !== null ? null : null;
+  const uvApprox = cloud !== null ? Math.max(0, Math.round(8 * (1 - cloud/100))) : null;
+  $('m-uv').textContent = uvApprox !== null ? uvApprox : '—';
+  $('m-uv-label').textContent = uvLabel(uvApprox);
+
+  $('m-winddir').textContent = windDir !== null ? Math.round(windDir) + '°' : '—';
+  $('m-winddir-label').textContent = windDir !== null ? windDirLabel(windDir) : 'degrees';
+  if (windDir !== null) {
+    $('compass-arrow').style.transform = `rotate(${windDir}deg)`;
+  }
+
+  $('m-precip').textContent = precip !== null ? precip.toFixed(2) : '—';
+  $('m-cloud').textContent = cloud !== null ? Math.round(cloud) : '—';
+
+  // Forecast – next 8 hours
+  const fcRow = $('forecast-row');
+  fcRow.innerHTML = '';
+  const fcHours = data.hours.slice(0, 8);
+  fcHours.forEach(h => {
+    const t = pickSource(h.airTemperature);
+    const w = pickSource(h.windSpeed);
+    const c = pickSource(h.cloudCover);
+    const p = pickSource(h.precipitation);
+    const time = new Date(h.time);
+    const label = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const cell = document.createElement('div');
+    cell.className = 'forecast-cell';
+    cell.innerHTML = `
+      <div class="fc-time">${label}</div>
+      <div class="fc-icon">${fcIcon(c, p)}</div>
+      <div class="fc-temp">${t !== null ? Math.round(t) + '°' : '—'}</div>
+      <div class="fc-wind">${w !== null ? w.toFixed(1) + ' m/s' : '—'}</div>
+    `;
+    fcRow.appendChild(cell);
+  });
+
+  // Marine
+  const waveH = pickSource(now.waveHeight);
+  const wavePer = pickSource(now.wavePeriod);
+  const waterTemp = pickSource(now.waterTemperature);
+  const swellH = pickSource(now.swellHeight);
+  const currentSpd = pickSource(now.currentSpeed);
+  const marineData = [];
+  if (waveH !== null) marineData.push({ icon: '🌊', label: 'Wave Height', val: waveH.toFixed(1) + ' m' });
+  if (wavePer !== null) marineData.push({ icon: '⏱', label: 'Wave Period', val: wavePer.toFixed(0) + ' s' });
+  if (waterTemp !== null) marineData.push({ icon: '🌡', label: 'Water Temp', val: Math.round(waterTemp) + '°C' });
+  if (swellH !== null) marineData.push({ icon: '🏄', label: 'Swell Height', val: swellH.toFixed(1) + ' m' });
+  if (currentSpd !== null) marineData.push({ icon: '🔄', label: 'Current', val: currentSpd.toFixed(2) + ' m/s' });
+
+  const marineStrip = $('marine-strip');
+  const marineTitle = $('marine-title');
+  marineStrip.innerHTML = '';
+  if (marineData.length) {
+    marineTitle.style.display = 'block';
+    marineData.forEach(d => {
+      const card = document.createElement('div');
+      card.className = 'marine-card';
+      card.innerHTML = `<div class="marine-icon">${d.icon}</div><div><div class="marine-label">${d.label}</div><div class="marine-val">${d.val}</div></div>`;
+      marineStrip.appendChild(card);
+    });
+  } else {
+    marineTitle.style.display = 'none';
+  }
+
+  showScreen('weather');
+}
+
+async function searchCity() {
+  const city = $('city-input').value.trim();
+  if (!city) { showToast('Enter a city name'); return; }
+  showScreen('loading');
+  try {
+    const { lat, lng, display } = await geocodeCity(city);
+    currentLat = lat; currentLng = lng; currentCity = display;
+    await loadWeather(lat, lng, display);
+  } catch (e) {
+    $('error-msg').textContent = e.message || 'City not found';
+    showScreen('error');
+  }
+}
+
+$('search-btn').addEventListener('click', searchCity);
+$('city-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchCity(); });
+
+$('locate-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  showScreen('loading');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+      const data = await res.json();
+      const name = data.address?.city || data.address?.town || data.address?.village || 'Your Location';
+      currentLat = lat; currentLng = lng; currentCity = name;
+      await loadWeather(lat, lng, name);
+    } catch {
+      await loadWeather(lat, lng, 'Your Location');
+    }
+  }, () => {
+    showScreen('idle');
+    showToast('Location access denied');
+  });
+});
+</script>
+</body>
+</html>
